@@ -7,62 +7,171 @@ import {
   Button,
   StyleSheet,
   ScrollView,
+  Alert,
 } from "react-native";
 
 import { Ingredient } from "../types/Ingredient";
+import { useNavigation } from "@react-navigation/native";
+import {
+  addDays,
+  DEFAULT_OPENED_SHELF_LIFE_DAYS,
+} from "../utils/ingredientUtils";
 
 interface Props {
   ingredients: Ingredient[];
   addIngredient: (ingredient: Ingredient) => void;
+
+  scannedProduct: {
+    name: string;
+    brand: string;
+  } | null;
+  setScannedProduct: React.Dispatch<
+    React.SetStateAction<{
+      name: string;
+      brand: string;
+    } | null>
+  >;
 }
 
 export default function AddIngredientScreen({
   ingredients,
   addIngredient,
+  scannedProduct,
+  setScannedProduct,
 }: Props) {
-  const [selectedCategory, setSelectedCategory] = React.useState("");
+  const [selectedCategory, setSelectedCategory] = React.useState<
+    Ingredient["category"] | ""
+  >("");
   const [ingredientName, setIngredientName] = React.useState("");
 
-  const [location, setLocation] = React.useState("");
-  const [type, setType] = React.useState("");
+  const [location, setLocation] = React.useState<Ingredient["location"] | "">(
+    "",
+  );
 
-  const [expirationDate, setExpirationDate] = React.useState("");
+  const [type, setType] = React.useState<Ingredient["confectionType"] | "">("");
+
+  const [expirationDate, setExpirationDate] = React.useState<string>("");
+
+  const [brand, setBrand] = React.useState("");
+
+  const [openedDate, setOpenedDate] = React.useState<Date | undefined>(
+    undefined,
+  );
+
+  const [frozenDate, setFrozenDate] = React.useState<Date | undefined>(
+    undefined,
+  );
+
+  const [ripeness, setRipeness] = React.useState<Ingredient["ripeness"] | "">(
+    "",
+  );
+
+  React.useEffect(() => {
+    if (!scannedProduct) return;
+
+    setIngredientName(scannedProduct.name ?? "");
+    setBrand(scannedProduct.brand ?? "");
+
+    setScannedProduct(null);
+  }, [scannedProduct, setScannedProduct]);
+
+  const handleTypeChange = (value: Ingredient["confectionType"] | "") => {
+    setType(value);
+
+    // automatically freeze if type is frozen
+    if (value === "frozen") {
+      setFrozenDate(new Date());
+    } else {
+      setFrozenDate(undefined);
+    }
+  };
+
+  const handleFreeze = () => {
+    setFrozenDate(new Date());
+  };
+
+  const handleUnfreeze = () => {
+    setFrozenDate(undefined);
+  };
+
+  const handleOpen = () => {
+    setOpenedDate(new Date());
+  };
+
+  const handleClose = () => {
+    setOpenedDate(undefined);
+  };
+
+  const navigation = useNavigation<any>();
 
   const handleSubmit = () => {
-    alert("SUBMIT");
-    console.log(ingredients);
-
     let finalExpirationDate: Date | undefined = undefined;
 
+    if (!ingredientName.trim()) {
+      Alert.alert("Missing Name", "Ingredient name is required.");
+      return;
+    }
     if (expirationDate === "1 day") {
-      finalExpirationDate = new Date();
-      finalExpirationDate.setDate(finalExpirationDate.getDate() + 1);
+      finalExpirationDate = addDays(new Date(), 1);
     } else if (expirationDate === "1 week") {
-      finalExpirationDate = new Date();
-      finalExpirationDate.setDate(finalExpirationDate.getDate() + 7);
+      finalExpirationDate = addDays(new Date(), 7);
     } else if (expirationDate === "1 month") {
-      finalExpirationDate = new Date();
-      finalExpirationDate.setMonth(finalExpirationDate.getMonth() + 1);
+      finalExpirationDate = addDays(new Date(), 30);
+    } else if (expirationDate === "1 year") {
+      finalExpirationDate = addDays(new Date(), 365);
     }
 
     const newIngredient: Ingredient = {
-      id: ingredients.length + 1,
+      // safer unique id
+      id: Date.now(),
 
       name: ingredientName,
-      category: selectedCategory,
-      location: location,
-      confectionType: type,
+
+      category: selectedCategory === "" ? undefined : selectedCategory,
+      location: location === "" ? undefined : location,
+      confectionType: type === "" ? undefined : type,
 
       expirationDate: finalExpirationDate,
+
+      brand: brand,
+
+      openedDate: openedDate ? new Date(openedDate) : undefined,
+
+      openedShelfLifeDays: openedDate
+        ? DEFAULT_OPENED_SHELF_LIFE_DAYS
+        : undefined,
+
+      frozenDate: frozenDate ? new Date(frozenDate) : undefined,
+
+      ripeness: ripeness === "" ? undefined : ripeness,
+
+      lastRipenessCheck:
+        selectedCategory === "fruit" || selectedCategory === "vegetable"
+          ? new Date()
+          : undefined,
     };
 
     addIngredient(newIngredient);
 
+    // RESET FORM
+
     setIngredientName("");
+
     setSelectedCategory("");
+
     setLocation("");
+
     setType("");
+
     setExpirationDate("");
+
+    setBrand("");
+
+    setOpenedDate(undefined);
+
+    setFrozenDate(undefined);
+
+    setRipeness("");
   };
 
   return (
@@ -76,6 +185,13 @@ export default function AddIngredientScreen({
         placeholder="Ingredient name"
       />
 
+      <TextInput
+        style={styles.input}
+        onChangeText={setBrand}
+        value={brand}
+        placeholder="Brand"
+      />
+
       <View style={styles.pickerContainer}>
         <Text style={styles.label}>Category</Text>
 
@@ -85,6 +201,7 @@ export default function AddIngredientScreen({
           style={styles.picker}
         >
           <Picker.Item label="Select category..." value="" />
+
           <Picker.Item label="fruit" value="fruit" />
           <Picker.Item label="vegetable" value="vegetable" />
           <Picker.Item label="dairy" value="dairy" />
@@ -103,6 +220,7 @@ export default function AddIngredientScreen({
           style={styles.picker}
         >
           <Picker.Item label="Select location..." value="" />
+
           <Picker.Item label="fridge" value="fridge" />
           <Picker.Item label="freezer" value="freezer" />
           <Picker.Item label="pantry" value="pantry" />
@@ -114,10 +232,11 @@ export default function AddIngredientScreen({
 
         <Picker
           selectedValue={type}
-          onValueChange={setType}
+          onValueChange={handleTypeChange}
           style={styles.picker}
         >
           <Picker.Item label="Select type..." value="" />
+
           <Picker.Item label="fresh" value="fresh" />
           <Picker.Item label="canned" value="canned" />
           <Picker.Item label="frozen" value="frozen" />
@@ -134,11 +253,54 @@ export default function AddIngredientScreen({
           style={styles.picker}
         >
           <Picker.Item label="Select expiration..." value="" />
+
           <Picker.Item label="1 day" value="1 day" />
           <Picker.Item label="1 week" value="1 week" />
           <Picker.Item label="1 month" value="1 month" />
           <Picker.Item label="1 year" value="1 year" />
         </Picker>
+      </View>
+
+      {(selectedCategory === "fruit" || selectedCategory === "vegetable") && (
+        <View style={styles.pickerContainer}>
+          <Text style={styles.label}>Ripeness</Text>
+
+          <Picker
+            selectedValue={ripeness}
+            onValueChange={setRipeness}
+            style={styles.picker}
+          >
+            <Picker.Item label="Select ripeness..." value="" />
+
+            <Picker.Item label="unripe" value="unripe" />
+            <Picker.Item label="ripe" value="ripe" />
+            <Picker.Item label="overripe" value="overripe" />
+          </Picker>
+        </View>
+      )}
+
+      <View style={styles.actionButtons}>
+        <Button
+          title={frozenDate ? "Unfreeze" : "Freeze"}
+          onPress={frozenDate ? handleUnfreeze : handleFreeze}
+          color="#841584"
+        />
+      </View>
+
+      <View style={styles.actionButtons}>
+        <Button
+          title={openedDate ? "Undo open" : "Open"}
+          onPress={openedDate ? handleClose : handleOpen}
+          color="#841584"
+        />
+      </View>
+
+      <View style={styles.actionButtons}>
+        <Button
+          title="Scan Barcode"
+          onPress={() => navigation.navigate("Scanner")}
+          color="#841584"
+        />
       </View>
 
       <View style={styles.buttonContainer}>
@@ -147,6 +309,7 @@ export default function AddIngredientScreen({
     </ScrollView>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -160,13 +323,6 @@ const styles = StyleSheet.create({
     marginBottom: 25,
     marginTop: 10,
     color: "#222",
-  },
-
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 10,
-    color: "#444",
   },
 
   input: {
@@ -201,64 +357,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
 
+  actionButtons: {
+    marginBottom: 15,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+
   buttonContainer: {
     marginTop: 15,
     marginBottom: 30,
     borderRadius: 10,
     overflow: "hidden",
-  },
-
-  filterSection: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 20,
-
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-
-    elevation: 2,
-  },
-
-  card: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 14,
-
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-
-    elevation: 2,
-  },
-
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 10,
-    color: "#222",
-  },
-
-  cardRow: {
-    fontSize: 15,
-    marginBottom: 4,
-    color: "#555",
-  },
-
-  emptyText: {
-    textAlign: "center",
-    marginTop: 30,
-    fontSize: 16,
-    color: "#888",
   },
 });
